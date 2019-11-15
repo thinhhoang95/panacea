@@ -15,6 +15,7 @@ f = 0.026; % iPhone camera wide angle lens
 globalTs = 1/300; % global sampling time
 trackingTs = 1/25; % x fps for tracking algorithm
 detectionTs = 3.25; % CNN delay in seconds
+imuTs = 1/120; % IMU sampling time
 numOfLm = 50;
 
 lms = zeros(numOfLm,3);
