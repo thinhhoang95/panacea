@@ -8,6 +8,7 @@ function y = Project(f,R,x,xl)
 x(3) = -x(3);
 xl(3) = -xl(3);
 z = R'*(xl-x)';
+z(3) = abs(z(3));
 if (z(3)==0)
     z(3)=1;
 end
