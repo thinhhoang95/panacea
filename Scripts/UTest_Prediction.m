@@ -12,7 +12,24 @@ clear Aa_row;
 % Initialize the augmented B matrix
 Ba = [Bdd; zeros((N_window+1)*6,3)];
 
+% Uncertainty of the input
 Q = 0.05*eye(3);
+% Intial state
+X = zeros((N_window+2)*6,1);
+% Initial covariance matrix
 P = zeros((N_window+2)*6);
-u = 0.05 * ones(6,6);
+% Input to the system
+u = 0.05 * ones(4,3);
 
+state_dest = 4;
+for i=1:state_dest
+    u_k = u(i,:);
+    % State propagation
+    X = Aa * X + Ba * u_k';
+    P = Aa * P * Aa' + Ba * Q * Ba';
+    fprintf('Propagation #: %d \n', i);
+    fprintf('State: \n');
+    disp(X);
+    fprintf('Covariance matrix: \n');
+    disp(P);
+end
