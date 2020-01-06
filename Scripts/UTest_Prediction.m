@@ -14,6 +14,8 @@ Ba = [Bdd; zeros((N_window+1)*6,3)];
 
 % Uncertainty of the input
 Q = 0.05*eye(3);
+% Uncertainty of the measurement
+R = 0.001*eye(numOfLm * 2);
 % Intial state
 X = zeros((N_window+2)*6,1);
 % Initial covariance matrix
