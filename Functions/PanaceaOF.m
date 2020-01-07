@@ -8,20 +8,43 @@
 function [Xay,Pay,debug] = PanaceaOF(i,j,xev,ofd,psi_i,psi_f,Xa,Pa,R,f,N_window,Aa,u,Ba,Q,clock,stateNum)
 numOfLm = length(ofd);
 
+% Determine the "true" optical flow, that is discarding optical flow of
+% zero out of the vector =>
+
+coder.varsize('trueOfdIndex', [1, numOfLm]);
+trueOfdIndex = [];
+for z=1:numOfLm
+    if (ofd(z,1)==0) && (ofd(z,2)==0)
+        % pass
+    else
+        trueOfdIndex = [trueOfdIndex z];
+    end
+end
+
+trueOfd = zeros(length(trueOfdIndex),2);
+truexe = zeros(1,length(trueOfdIndex));
+trueye = zeros(1,length(trueOfdIndex));
+for z=1:length(trueOfdIndex)
+    trueOfd(z,:) = ofd(trueOfdIndex(z),:);
+    truexe(z) = xev(z,1);
+    trueye(z)= xev(z,2);
+end
+
 % == Calculate the Kalman gain ==
 % psi_f = psiv(j,:);
 % psi_i = psiv(i,:);
 % x_f = Xa((6*j+1):(6*(j+1)),:);
 x_iv = Xa((6*i+1):(6*(i+1)),:);
 % -> Initialize variables <-
+numOfTrueLm = length(trueOfdIndex);
 Hk = zeros(numOfLm*2,(N_window+2)*6);
 meas = zeros(numOfLm*2,1);
 % -> Calculate Matrix Hk <-
-for k=1:numOfLm
-    xe = xev(k,1);
-    ye = xev(k,2);
-    dx = ofd(k,1);
-    dy = ofd(k,2);
+for k=1:length(trueOfdIndex)
+    xe = truexe(k);
+    ye = trueye(k);
+    dx = trueOfd(k,1);
+    dy = trueOfd(k,2);
     % OF Virtual measurement operator
     P = [-f 0 xe+dx; 0 -f ye+dy];
     % Counter rotation operator for target yaw angle
@@ -50,15 +73,15 @@ if (stateNum~=0)
     Xay = Aa * Xa + Ba * u;
     Pay = Aa * Pa * Aa' + Ba * Q * Ba';
 else
-    % Lk = Aa * Pa * Hk' / (Hk * Pa * Hk' + R);
-    % Xay = Aa * Xa + Ba * u + Lk * (-meas + Hk * Xa);
-    % Pay = Aa * Pa * (Aa - Lk * Hk)' + Ba * Q * Ba';
-    Xay = Aa * Xa + Ba * u;
-    Pay = Aa * Pa * Aa' + Ba * Q * Ba';
+    Lk = Aa * Pa * Hk' / (Hk * Pa * Hk' + R);
+    Xay = Aa * Xa + Ba * u + Lk * (+meas - Hk * Xa);
+    Pay = Aa * Pa * (Aa - Lk * Hk)' + Ba * Q * Ba';
+    % Xay = Aa * Xa + Ba * u;
+    % Pay = Aa * Pa * Aa' + Ba * Q * Ba';
     fprintf('Kalman filter is executed at time: ');
     disp(clock);
 end
 
 % Exporting data to the debug port
-debug = -Hk*Xa + meas;
+debug = zeros(3,1);
 end
