@@ -5,7 +5,7 @@
 % R: covariance of measurement uncertainty (optical flow).
 % Output: Xay: output state, Pay: output covariance matrix
 
-function [Xay,Pay,predMeas] = PanaceaOF(i,j,xev,ofd,psi_i,psi_f,Xa,Pa,R,f,N_window,Aa,u,Ba,Q,stateCount)
+function [Xay,Pay,debug] = PanaceaOF(i,j,xev,ofd,psi_i,psi_f,Xa,Pa,R,f,N_window,Aa,u,Ba,Q,stateCount)
 numOfLm = length(ofd);
 
 % == Calculate the Kalman gain ==
@@ -39,6 +39,7 @@ for k=1:numOfLm
     % -> Calculate the measurement vector <-
     % -> from the original state <- %
     x_i = Sf1*x_iv;
+    % meas is from projected 
     meas((k-1)*2+1:k*2,:) = -P*Y_f*(-[x_i(1); x_i(2); 0] + x_i(3)/f*inv(Y_i)*[xe; ye; 0]);
 end
 
@@ -54,6 +55,6 @@ else
     Xay = Aa * Xa + Ba * u;
     Pay = Aa * Pa * Aa' + Ba * Q * Ba';
 end
-% Export the residual vector out
-predMeas = Sf1 * Sf2 * Xa;
+% Exporting data to the debug port
+debug = -meas + Hk * Xa;
 end
