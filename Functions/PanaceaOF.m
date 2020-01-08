@@ -39,6 +39,7 @@ x_iv = Xa((6*i+1):(6*(i+1)),:);
 numOfTrueLm = length(trueOfdIndex);
 Hk = zeros(numOfLm*2,(N_window+2)*6);
 meas = zeros(numOfLm*2,1);
+Rtrue = zeros(numOfLm*2);
 % -> Calculate Matrix Hk <-
 for k=1:length(trueOfdIndex)
     xe = truexe(k);
@@ -59,7 +60,8 @@ for k=1:length(trueOfdIndex)
     Sf2(:,(6*j+1):(6*(j+1))) = eye(6);
     % Append to the virtual measurement matrix
     Hk((k-1)*2+1:k*2,:) = P*Y_f*Sf1*Sf2;
-
+    % Trim the R matrix to only match available measurements
+    Rtrue(k,:) = R(trueOfdIndex(k),:);
     % -> Calculate the measurement vector <-
     % -> from the original state <- %
     x_i = Sf1*x_iv;
@@ -74,7 +76,8 @@ if (stateNum~=0)
     Pay = Aa * Pa * Aa' + Ba * Q * Ba';
 else
     Lk = Aa * Pa * Hk' / (Hk * Pa * Hk' + R);
-    Xay = Aa * Xa + Ba * u + Lk * (+meas - Hk * Xa);
+    % Lk = zeros(42,100);
+    Xay = Aa * Xa + Ba * u + Lk * (meas - Hk * Xa);
     Pay = Aa * Pa * (Aa - Lk * Hk)' + Ba * Q * Ba';
     % Xay = Aa * Xa + Ba * u;
     % Pay = Aa * Pa * Aa' + Ba * Q * Ba';
@@ -83,5 +86,5 @@ else
 end
 
 % Exporting data to the debug port
-debug = zeros(3,1);
+debug = [Pay(1,1) Pay(2,2) Pay(3,3)];
 end
