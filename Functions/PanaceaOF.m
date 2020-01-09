@@ -47,7 +47,8 @@ for k=1:length(trueOfdIndex)
     dx = trueOfd(k,1);
     dy = trueOfd(k,2);
     % OF Virtual measurement operator
-    P = [-f 0 xe+dx; 0 -f ye+dy];
+    % P = [-f 0 xe+dx; 0 -f ye+dy];
+    P = -[-f 0 xe+dx; 0 -f ye+dy];
     % Counter rotation operator for target yaw angle
     Y_f = [cos(psi_f) -sin(psi_f) 0; sin(psi_f) cos(psi_f) 0; 0 0 1];
     % Counter rotation operator for initial yaw angle
@@ -63,11 +64,14 @@ for k=1:length(trueOfdIndex)
     % Trim the R matrix to only match available measurements
     Rtrue(k,:) = R(trueOfdIndex(k),:);
     % -> Calculate the measurement vector <-
-    % -> from the original state <- %
+    % -> from the original state (1st state) <- %
     x_i = Sf1*x_iv;
     % meas is from projected 
     meas((k-1)*2+1:k*2,:) = -P*Y_f*(-[x_i(1); x_i(2); 0] + x_i(3)/f*inv(Y_i)*[xe; ye; 0]);
 end
+
+% Initialize the debug variable
+debug = zeros(length(Xa),1);
 
 % If stateCount is 0, then it matches the trackingTs, perform Kalman
 % correction; otherwise just propagate the state forward!
@@ -77,14 +81,20 @@ if (stateNum~=0)
 else
     Lk = Aa * Pa * Hk' / (Hk * Pa * Hk' + R);
     % Lk = zeros(42,100);
-    Xay = Aa * Xa + Ba * u + Lk * (meas - Hk * Xa);
-    Pay = Aa * Pa * (Aa - Lk * Hk)' + Ba * Q * Ba';
+    % Adjustment term
+    % inno = meas - Hk * Xa;
+    inno = Hk * Xa - meas;
+    adj = - Lk * inno;
+    Xa_cor = Aa * Xa + Ba * u + adj; % Corrected by Kalman Filter
+    Xay = Xa; 
+    Xay(1:6*i) = Xa_cor(1:6*i); % Only update newer states
+    Pa_cor = Aa * Pa * (Aa - Lk * Hk)' + Ba * Q * Ba';
+    Pay = Pa;
+    Pay(1:6*i,1:6*i)=Pa_cor(1:6*i,1:6*i);
     % Xay = Aa * Xa + Ba * u;
     % Pay = Aa * Pa * Aa' + Ba * Q * Ba';
     fprintf('Kalman filter is executed at time: ');
     disp(clock);
+    debug = adj;
 end
-
-% Exporting data to the debug port
-debug = [Pay(1,1) Pay(2,2) Pay(3,3)];
 end
