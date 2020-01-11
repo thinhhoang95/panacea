@@ -75,10 +75,7 @@ debug = zeros(length(Xa),1);
 
 % If stateCount is 0, then it matches the trackingTs, perform Kalman
 % correction; otherwise just propagate the state forward!
-if (stateNum~=0)
-    Xay = Aa * Xa + Ba * u;
-    Pay = Aa * Pa * Aa' + Ba * Q * Ba';
-else
+if (stateNum==0 && clock>4 && clock<4.0418) 
     Lk = Aa * Pa * Hk' / (Hk * Pa * Hk' + R);
     % Lk = zeros(42,100);
     % Adjustment term
@@ -96,5 +93,8 @@ else
     fprintf('Kalman filter is executed at time: ');
     disp(clock);
     debug = adj;
+else
+    Xay = Aa * Xa + Ba * u;
+    Pay = Aa * Pa * Aa' + Ba * Q * Ba';
 end
 end
