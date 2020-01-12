@@ -68,6 +68,7 @@ for k=1:length(trueOfdIndex)
     x_i = Sf1*x_iv;
     % meas is from projected 
     meas((k-1)*2+1:k*2,:) = -P*Y_f*(-[x_i(1); x_i(2); 0] + x_i(3)/f*inv(Y_i)*[xe; ye; 0]);
+    
 end
 
 % Initialize the debug variable

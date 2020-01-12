@@ -1,0 +1,103 @@
+function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
+    fprintf('Starting Panacea Algorithm... \n');
+    fprintf('State Estimation for Autonomous Helicopter Landing by Hoang Dinh Thinh (1970062) \n');
+    fprintf('Author: Hoang Dinh Thinh \n');
+    % global Aa Ba imuTs trackingTs out N_window Q R;
+    % Initialize the variables and initial conditions
+    Xa = zeros((N_window+2)*6,1,length(out.accel.time));
+    Xa_minus = zeros((N_window+2)*6,1,length(out.accel.time));
+    Xa_plus = zeros((N_window+2)*6,1,length(out.accel.time));
+    Pa = zeros(6,6,length(out.accel.time));
+    Pa_minus = zeros(6,6,length(out.accel.time));
+    Pa_plus = zeros(6,6,length(out.accel.time));
+    time_max = length(out.accel.time) - 1;
+    next_tracking_time = 2;
+    next_tracking_clock = out.psi.Time(next_tracking_time);
+    tracking_delay_length = trackingTs/imuTs;
+    fprintf('Memory alloc completed! \n');
+    for time=1:time_max % For each IMU timestep, time is the multiplier of imuTs
+        clock = time*imuTs;
+        % Propagate the state forward by IMU measurement
+        u = out.accel.signals.values(time,:);
+        Xa_minus(:,:,time) = Aa * Xa(:,time) + Ba * u';
+        Pa_minus(:,:,time) = Add * Pa(:,:,time) * Add' + Bdd * Q * Bdd';
+        % Search for the entry in the trackingTs samples
+        if (clock>next_tracking_clock)
+            fprintf('Begin Kalman correction \n');
+            % The anti-yawing matrices
+            psi_f = -out.psi.Data(next_tracking_time);
+            psi_i = -out.psi.Data(next_tracking_time-1);
+            Y_f = [cos(psi_f) -sin(psi_f) 0; sin(psi_f) cos(psi_f) 0; 0 0 1];
+            Y_i = [cos(psi_i) -sin(psi_i) 0; sin(psi_i) cos(psi_i) 0; 0 0 1];
+            % Preprocess the optical flow vector
+            ofdx = [];
+            xex = [];
+            ofdv = out.ofd.signals.values(:,:,next_tracking_time);
+            xev = out.xe.signals.values(:,:,next_tracking_time);
+            for i=1:length(ofdv)
+                if (ofdv(i,1)~=0 || ofdv(i,2)~=0)
+                    ofdx = [ofdx; ofdv(i,:)];
+                    xex = [xex; xev(i,:)];
+                end
+            end
+            clear ofdv xev i;
+            % Calculate the measurement vector z of the optical flow
+            % Measurement vector includes optical flow and the acceleration
+            % between subsequent past IMU measurements
+            z = zeros(length(ofdx)*2+3*tracking_delay_length,1,length(out.ofd.time));
+            H = zeros(size(Xa,1));
+            Sf1 = [eye(3) zeros(3)]; % selecting position states out of 6 states of position and velocity
+            Sf2 = zeros(6,6*(N_window+2));
+            % >>>>> IF THE FIRST STATE IS NOT THE STATE THAT USES TO
+            % CALCULATE THE OPTICAL FLOW, MODIFY THE NEXT LINE <<<<<
+            final_of_state = 0;
+            Sf2(final_of_state*6+1:(final_of_state+1)*6,final_of_state*6+1:(final_of_state+1)*6) = eye(6); % THE FIRST STATE IS THE FINAL STATE OF THE OPTICAL FLOW
+            x_f = Xa(final_of_state*6+1:(final_of_state+1)*6,time); % THE FIRST STATE IS THE FINAL STATE OF THE OPTICAL FLOW
+            % >>>>> <<<<< %
+            x_i = Sf1*Xa(tracking_delay_length*6+1:(tracking_delay_length+1)*6,time);
+            for i=1:length(ofdx)
+                % Fill in the optical flow measurement components
+                dx = ofdx(i,1);
+                dy = ofdx(i,2);
+                xe = xex(i,1);
+                ye = xex(i,2);
+                F = [f 0 -(xe+dx); 0 f -(ye+dy)];
+                z((i-1)*2+1:i*2,next_tracking_time) = F*Y_f*((-x_i(3)/f) * inv(Y_i) * [xe ye 0]' + [x_f(1) x_f(2) 0]');
+                H((i-1)*2+1:i*2,:) = F*Y_f*Sf1*Sf2;
+            end
+            clear dx dy xe ye F i;
+            
+            for i=1:tracking_delay_length
+                % Fill in the acceleration measurement
+                z(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3,next_tracking_time) = out.accel.signals.values(time-(i-1),:) * imuTs;
+                % Fill in acceleration observation matrix
+                for j=1:3 % vx, vy, vz
+                    H(length(ofdx)*2+(i-1)*3+j,(i-1)*6+4+(j-1):i*6+4+(j-1))=[1 0 0 0 0 0 -1];
+                end
+            end
+            clear i j;
+            
+            Ra = zeros(size(z,1));
+            % Covariance of measurement uncertainty
+            Ra(1:length(ofdx)*2,1:length(ofdx)*2) = 5e-3 * eye(length(ofdx)*2);
+            for i=1:tracking_delay_length
+                Ra(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3,length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = Q;
+            end
+            
+            clear i;
+            
+            fprintf('Completed preprocessing of measurements! \n');
+            
+            % Moves the next trackingTs processing moment forward
+            next_tracking_time = next_tracking_time + 1;
+            next_tracking_clock = out.psi.Time(next_tracking_time);
+        end
+        Xa = Xa_minus;
+        Pa = Pa_minus;
+        
+    end
+    % Final true state: 8.5882 -8.5882 -30.7279
+    fprintf('True final state: \n');
+    disp(Xa(1:3,time_max+1));
+    
+end
