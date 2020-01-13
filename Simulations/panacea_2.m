@@ -19,18 +19,20 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs,
     time_max = length(out.accel.time) - 1;
     % time_max = 200;
     next_tracking_time = 2;
-    next_tracking_clock = out.psi.Time(next_tracking_time);
+    next_tracking_clock = out.psi.Time(next_tracking_time); % Only apply Panacea after 3 seconds
     tracking_delay_length = trackingTs/imuTs;
     fprintf('OK \n');
     for time=1:time_max % For each IMU timestep, time is the multiplier of imuTs
         clock = time*imuTs;
         % Propagate the state forward by IMU measurement
         u = out.accel.signals.values(time,:);
-        % u = u + mvnrnd([0 0 0],Q);
+        if (clock>3)
+            % u = u + mvnrnd([0 0 0],Q);
+        end
         Xa_minus(:,:,time) = Aa * Xa(:,time) + Ba * u';
         Pa_minus(:,:,time) = Aa * Pa(:,:,time) * Aa' + Ba * Q * Ba';
         % Search for the entry in the trackingTs samples
-        if (clock>next_tracking_clock)
+        if (clock>next_tracking_clock && clock>3)
             fprintf('Measurement vector and matrix %f... ', clock);
             % The anti-yawing matrices
             psi_f = -out.psi.Data(next_tracking_time);
@@ -122,11 +124,16 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs,
             dbg_csr(next_tracking_time) = norm(innov(length(ofdx)*2+tracking_delay_length*3+1:length(ofdx)*2+tracking_delay_length*3+6));
             dbg_acc(next_tracking_time) = norm(innov(length(ofdx)*2+1:length(ofdx)*2+tracking_delay_length*3));
             fprintf('Measurement error: %.16f \n', dbg_meas(next_tracking_time));
-            fprintf('Panacea adjusted at time %f: \n', clock);
+            fprintf('Panacea adjusted at time %f / %d: \n', [clock, next_tracking_time]);
             disp(adjust(1:3));
             % Moves the next trackingTs processing moment forward
             next_tracking_time = next_tracking_time + 1;
             next_tracking_clock = out.psi.Time(next_tracking_time);
+        elseif (clock>next_tracking_clock && clock<=3)
+            next_tracking_time = next_tracking_time + 1;
+            next_tracking_clock = out.psi.Time(next_tracking_time);
+            Xa_plus(:,time) = Xa_minus(:,time);
+            Pa_plus(:,:,time) = Pa_minus(:,:,time);
         else
             Xa_plus(:,time) = Xa_minus(:,time);
             Pa_plus(:,:,time) = Pa_minus(:,:,time);
