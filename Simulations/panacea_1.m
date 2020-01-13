@@ -23,7 +23,7 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
         Pa_minus(:,:,time) = Add * Pa(:,:,time) * Add' + Bdd * Q * Bdd';
         % Search for the entry in the trackingTs samples
         if (clock>next_tracking_clock)
-            fprintf('Begin Kalman correction \n');
+            fprintf('Begin Kalman correction at clock %f \n', clock);
             % The anti-yawing matrices
             psi_f = -out.psi.Data(next_tracking_time);
             psi_i = -out.psi.Data(next_tracking_time-1);
