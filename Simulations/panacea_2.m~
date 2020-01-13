@@ -1,9 +1,13 @@
-function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
+function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
     fprintf('Starting Panacea Algorithm... \n');
     fprintf('State Estimation for Autonomous Helicopter Landing by Hoang Dinh Thinh (1970062) \n');
     fprintf('Author: Hoang Dinh Thinh \n');
     fprintf('Starting memory alloc... ');
     % global Aa Ba imuTs trackingTs out N_window Q R;
+    % Initialize debug variables
+    dbg_meas = zeros(1,length(out.ofd.time));
+    dbg_ofd = zeros(1,length(out.ofd.time));
+    dbg_csr = zeros(1,length(out.ofd.time));
     % Initialize the variables and initial conditions
     Xa = zeros((N_window+2)*6,1,length(out.accel.time));
     Xa_minus = zeros((N_window+2)*6,1,length(out.accel.time));
@@ -11,7 +15,12 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
     Pa = zeros((N_window+2)*6,(N_window+2)*6,length(out.accel.time));
     Pa_minus = zeros((N_window+2)*6,(N_window+2)*6,length(out.accel.time));
     Pa_plus = zeros((N_window+2)*6,(N_window+2)*6,length(out.accel.time));
+    z = zeros(length(ofdx)*2+3*tracking_delay_length+6,1,length(out.ofd.time));
+            
+    innov = zeros(size(z,1),length(out.ofd.time));
+    
     time_max = length(out.accel.time) - 1;
+    % time_max = 200;
     next_tracking_time = 2;
     next_tracking_clock = out.psi.Time(next_tracking_time);
     tracking_delay_length = trackingTs/imuTs;
@@ -20,6 +29,7 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
         clock = time*imuTs;
         % Propagate the state forward by IMU measurement
         u = out.accel.signals.values(time,:);
+        % u = u + mvnrnd([0 0 0],Q);
         Xa_minus(:,:,time) = Aa * Xa(:,time) + Ba * u';
         Pa_minus(:,:,time) = Aa * Pa(:,:,time) * Aa' + Ba * Q * Ba';
         % Search for the entry in the trackingTs samples
@@ -46,7 +56,6 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
             % Measurement vector includes optical flow and the acceleration
             % between subsequent past IMU measurements and direct
             % observation of origin optical flow state e.g. X(-5)
-            z = zeros(length(ofdx)*2+3*tracking_delay_length+6,1,length(out.ofd.time));
             H = zeros(size(z,1),size(Xa,1));
             Sf1 = [eye(3) zeros(3)]; % selecting position states out of 6 states of position and velocity
             Sf2 = zeros(6,6*(N_window+2));
@@ -85,7 +94,7 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
             
             Ra = zeros(size(z,1));
             % Covariance of measurement uncertainty
-            Ra(1:length(ofdx)*2,1:length(ofdx)*2) = 5e-3 * eye(length(ofdx)*2);
+            Ra(1:length(ofdx)*2,1:length(ofdx)*2) = R * eye(length(ofdx)*2);
             % Covariance of the acceleration constraints between states
             for i=1:tracking_delay_length
                 Ra(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3,length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = Q;
@@ -103,19 +112,32 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
             fprintf('OK \n');
             
             fprintf('Kalman filtering... ');
+            
             K_gain = Pa_minus(:,:,time) * H' / (H * Pa_minus(:,:,time) * H' + Ra);
-            innov = z(:,next_tracking_time) - H*Xa_minus(:,time);
-            Xa_plus(:,time) = Xa_minus(:,time) + K_gain * innov;
+            innov(:,next_tracking_time) = z(:,next_tracking_time) - H*Xa_minus(:,time);
+            % adjust = K_gain * innov;
+            adjust = zeros(size(Xa,1),1);
+            Xa_plus(:,time) = Xa_minus(:,time) + adjust;
             Pa_plus(:,:,time) = Pa_minus(:,:,time) * (eye((N_window+2)*6) - H'*K_gain');
+            fprintf('OK \n');
+            dbg_meas(next_tracking_time) = norm(innov(:,next_tracking_time));
+            dbg_ofd(next_tracking_time) = norm(innov(1:length(ofdx)*2,next_tracking_time));
+            dbg_csr(next_tracking_time) = norm(innov(length(ofdx)*2+tracking_delay_length*3+1:length(ofdx)*2+tracking_delay_length*3+6,next_tracking_time));
+            dbg_acc(next_tracking_time) = norm(innov(length(ofdx)*2+1:length(ofdx)*2+tracking_delay_length*3,next_tracking_time));
+            fprintf('Measurement error: %.16f \n', dbg_meas(next_tracking_time));
+            fprintf('Panacea adjusted at time %f: \n', clock);
+            disp(adjust(1:3));
             % Moves the next trackingTs processing moment forward
             next_tracking_time = next_tracking_time + 1;
             next_tracking_clock = out.psi.Time(next_tracking_time);
-            fprintf('OK \n');
+        else
+            Xa_plus(:,time) = Xa_minus(:,time);
+            Pa_plus(:,:,time) = Pa_minus(:,:,time);
         end
         Xa(:,time+1) = Xa_plus(:,time);
         Pa(:,:,time+1) = Pa_plus(:,:,time);
-        fprintf('Corrected state at time %f: \n', time);
-        disp(Xa(:,time+1));
+        % fprintf('Corrected state at time %f: \n', time);
+        % disp(Xa(:,time+1));
     end
     % Final true state: 8.5882 -8.5882 -30.7279
     fprintf('True final state: \n');

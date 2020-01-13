@@ -96,8 +96,6 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
             % observation of the optical flow). Ra is initialized from
             % zero, thus left intact!
             
-            Ra(length(ofdx)*2+tracking_delay_length*3+1:length(ofdx)*2+tracking_delay_length*3+6,length(ofdx)*2+tracking_delay_length*3+1:length(ofdx)*2+tracking_delay_length*3+6)=1e-4 * eye(6);
-            
             clear i;
             
             fprintf('OK \n');
@@ -106,19 +104,17 @@ function panacea_1(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R, f)
             K_gain = Pa_minus(:,:,time) * H' / (H * Pa_minus(:,:,time) * H' + Ra);
             innov = z(:,next_tracking_time) - H*Xa_minus(:,time);
             Xa_plus(:,time) = Xa_minus(:,time) + K_gain * innov;
-            Pa_plus(:,:,time) = Pa_minus(:,:,time) * (eye((N_window+2)*6) - H'*K_gain');
+            Pa_plus(:,:,time) = Pa_minus * (eye((N_window+2)*6) - H'*K_gain');
             % Moves the next trackingTs processing moment forward
             next_tracking_time = next_tracking_time + 1;
             next_tracking_clock = out.psi.Time(next_tracking_time);
-            fprintf('OK \n');
         end
-        Xa(:,time+1) = Xa_plus(:,time);
-        Pa(:,:,time+1) = Pa_plus(:,:,time);
-        fprintf('Corrected state at time %f: \n', time);
-        disp(Xa(:,time+1));
+        Xa = Xa_plus;
+        Pa = Pa_plus(;
+        
     end
     % Final true state: 8.5882 -8.5882 -30.7279
     fprintf('True final state: \n');
-    disp(Xa(1:3,time_max));
+    disp(Xa(1:3,time_max+1));
     
 end
