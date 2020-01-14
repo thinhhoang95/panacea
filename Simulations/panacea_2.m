@@ -22,10 +22,15 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs,
     next_tracking_clock = out.psi.Time(next_tracking_time); % Only apply Panacea after 3 seconds
     tracking_delay_length = trackingTs/imuTs;
     fprintf('OK \n');
+    % Corrupt the acceleration signals
+    accel_corrupted = out.accel.signals.values;
+    for i=1:length(out.accel.time)
+        % accel_corrupted(i,:) = accel_corrupted(i,:) + mvnrnd([0 0 0],Q);
+    end
     for time=1:time_max % For each IMU timestep, time is the multiplier of imuTs
         clock = time*imuTs;
         % Propagate the state forward by IMU measurement
-        u = out.accel.signals.values(time,:);
+        u = accel_corrupted(time,:);
         if (clock>3)
             % u = u + mvnrnd([0 0 0],Q);
         end
@@ -80,7 +85,7 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs,
             
             for i=1:tracking_delay_length
                 % Fill in the acceleration measurement
-                z(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = out.accel.signals.values(time-(i-1),:) * imuTs;
+                z(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = accel_corrupted(time-(i-1),:) * imuTs;
                 % Fill in acceleration observation matrix
                 for j=1:3 % vx, vy, vz
                     H(length(ofdx)*2+(i-1)*3+j,(i-1)*6+4+(j-1):i*6+4+(j-1))=[1 0 0 0 0 0 -1];
