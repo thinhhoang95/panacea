@@ -1,4 +1,4 @@
-function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R_val, f)
+function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_3(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R_val, f)
     fprintf('Starting Panacea Algorithm... \n');
     fprintf('State Estimation for Autonomous Helicopter Landing by Hoang Dinh Thinh (1970062) \n');
     fprintf('Author: Hoang Dinh Thinh \n');
@@ -68,9 +68,11 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc] = panacea_2(Aa, Add, Ba, Bdd, imuTs,
             % CALCULATE THE OPTICAL FLOW, MODIFY THE NEXT LINE <<<<<
             final_of_state = 0;
             Sf2(final_of_state*6+1:(final_of_state+1)*6,final_of_state*6+1:(final_of_state+1)*6) = eye(6); % THE FIRST STATE IS THE FINAL STATE OF THE OPTICAL FLOW
-            x_f = Xa_minus(final_of_state*6+1:(final_of_state+1)*6,time); % THE FIRST STATE IS THE FINAL STATE OF THE OPTICAL FLOW
+            % x_f = Xa_minus(final_of_state*6+1:(final_of_state+1)*6,time); % THE FIRST STATE IS THE FINAL STATE OF THE OPTICAL FLOW
             % >>>>> <<<<< %
-            x_i = Sf1*Xa(tracking_delay_length*6+1:(tracking_delay_length+1)*6,time);
+            % x_i = Sf1*Xa(tracking_delay_length*6+1:(tracking_delay_length+1)*6,time);
+            x_i = out.xi.Data(next_tracking_time,:);
+            x_f = out.xf.Data(next_tracking_time,:);
             for i=1:length(ofdx)
                 % Fill in the optical flow measurement components
                 dx = ofdx(i,1);
