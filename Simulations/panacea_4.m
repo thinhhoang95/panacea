@@ -1,4 +1,4 @@
-function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out] = panacea_3(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R_val, f, accel_rndprc)
+function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out,accuracy] = panacea_3(Aa, Add, Ba, Bdd, imuTs, trackingTs, out, N_window, Q, R_val, f, accel_rndprc)
     fprintf('Starting Panacea Algorithm... \n');
     fprintf('State Estimation for Autonomous Helicopter Landing by Hoang Dinh Thinh (1970062) \n');
     fprintf('Author: Hoang Dinh Thinh \n');
@@ -9,8 +9,10 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out] = panacea_3(Aa, Add, Ba,
     dbg_ofd = zeros(1,length(out.ofd.time));
     dbg_csr = zeros(1,length(out.ofd.time));
     dbg_acc = zeros(1,length(out.ofd.time));
+    accuracy = zeros(length(out.ofd.time),1);
     % Initialize the variables and initial conditions
     Xa = zeros((N_window+2)*6,1,length(out.accel.time));
+    Xa_true = zeros((N_window+2)*6,1,length(out.accel.time));
     Xa_minus = zeros((N_window+2)*6,1,length(out.accel.time));
     Xa_plus = zeros((N_window+2)*6,1,length(out.accel.time));
     Pa = zeros((N_window+2)*6,(N_window+2)*6,length(out.accel.time));
@@ -25,16 +27,18 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out] = panacea_3(Aa, Add, Ba,
     % Corrupt the acceleration signals
     accel_corrupted = out.accel.signals.values;
     for i=1:length(out.accel.time)
-        accel_corrupted(i,:) = accel_corrupted(i,:) + accel_rndprc(i,:);
+        accel_corrupted(i,:) = accel_corrupted(i,:) + 10*accel_rndprc(i,:);
     end
     for time=1:time_max % For each IMU timestep, time is the multiplier of imuTs
         clock = time*imuTs;
         % Propagate the state forward by IMU measurement
         u = accel_corrupted(time,:);
+        u_true = out.accel.signals.values(time,:);
         if (clock>3)
             % u = u + mvnrnd([0 0 0],Q);
         end
-        Xa_minus(:,:,time) = Aa * Xa(:,time) + Ba * u';
+        Xa_minus(:,time) = Aa * Xa(:,time) + Ba * u';
+        Xa_true(:,time+1) = Aa * Xa_true(:,time) + Ba * u_true';
         Pa_minus(:,:,time) = Aa * Pa(:,:,time) * Aa' + Ba * Q * Ba';
         % Search for the entry in the trackingTs samples
         if (clock>next_tracking_clock && clock>3)
@@ -101,10 +105,10 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out] = panacea_3(Aa, Add, Ba,
             
             Ra = zeros(size(z,1));
             % Covariance of measurement uncertainty
-            Ra(1:length(ofdx)*2,1:length(ofdx)*2) = 1e-7 * R_val * eye(length(ofdx)*2);
+            Ra(1:length(ofdx)*2,1:length(ofdx)*2) = 5e-8 * R_val * eye(length(ofdx)*2);
             % Covariance of the acceleration constraints between states
             for i=1:tracking_delay_length
-                Ra(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3,length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = 1e-3 * Q;
+                Ra(length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3,length(ofdx)*2+(i-1)*3+1:length(ofdx)*2+i*3) = Q;
             end
             % The covariance related to the initial constraint of the
             % original state of the optical flow analysis (X(-5)) has zero
@@ -147,6 +151,8 @@ function [dbg_meas,dbg_ofd,dbg_csr,dbg_acc,X_out,P_out] = panacea_3(Aa, Add, Ba,
         end
         Xa(:,time+1) = Xa_plus(:,time);
         Pa(:,:,time+1) = Pa_plus(:,:,time);
+        % Evaluate the accuracy of the solution
+        accuracy(time+1,:) = norm(Xa(1:3,time+1) - Xa_true(1:3,time+1));
         % fprintf('Corrected state at time %f: \n', time);
         % disp(Xa(:,time+1));
     end
