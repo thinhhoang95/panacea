@@ -1,6 +1,6 @@
 clc;
 
-N_window = 4; % Window length
+N_window = trackingTs/imuTs - 1; % Window length
 %N_window+1 x 6 is the total matrix size
 
 % Initialize the augmented A matrix

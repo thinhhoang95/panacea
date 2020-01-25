@@ -1,6 +1,6 @@
 clc;
 
-N_window = 5; % Window length
+N_window = 23; % Window length
 %N_window+2 x 6 is the total matrix size
 
 % Initialize the augmented A matrix
