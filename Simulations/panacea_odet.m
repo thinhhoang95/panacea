@@ -1,5 +1,5 @@
 function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length, f, a_process, Xout_accel)
-    % close all;
+    close all;
     fprintf('Starting Panacea Algorithm for Object Detection... \n');
     fprintf('State Estimation for Autonomous Helicopter Landing by Hoang Dinh Thinh (1970062) \n');
     fprintf('Author: Hoang Dinh Thinh \n');
@@ -12,11 +12,12 @@ function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length,
     Pww = zeros(6,6,window_length);
     uw = zeros(3,window_length);
     rez = zeros(3,length(out.xiod.time));
+    fitness = 0;
     fprintf('OK! \n');
     fprintf('Initializing window variables... ');
     % R: covariance of the acceleration, Q: measurement of detection
     R = 0.5*eye(3);
-    Q = diag([1e-2 1e-2 1e-8]);
+    Q = diag([1e-5 1e-5 3]);
     imu_cursor = 1; % cursor of the current state in the Xw
     detection_cursor = 1;
     next_detection_clock = out.xiod.time(detection_cursor + 1);
@@ -27,7 +28,7 @@ function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length,
         % and velocity:
         clock = time * imuTs;
         a = out.accel.signals.values(time,:);
-        % a = a + a_process(time,:);
+        a = a + a_process(time,:);
         imu_cursor = imu_cursor + 1;
         Xww(:,imu_cursor) = Add * Xww(:,imu_cursor - 1) + Bdd * a';
         Pww(:,:,imu_cursor) = Add * Pww(:,:,imu_cursor - 1) * Add' + Bdd * R * Bdd';
@@ -45,6 +46,9 @@ function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length,
             F2 = [eye(3), zeros(3)];
             H = F1*F2;
             state = Xww(:,1); % the first state is refined
+            state_true = out.pos.signals.values(time-imu_cursor+2,:);
+            % fprintf('Difference between state and true state: \n');
+            fitness = fitness + norm((state(1:3))' - state_true);
             P = Pww(:,:,1);
             z = [0; 0; -out.xtod.Data(detection_cursor,3)];
             if (det(P)<1e-12)
@@ -55,19 +59,19 @@ function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length,
             else
                 S = H*P*H'+Q;
                 Kg = P*H'*inv(S);
-                % state_hat = state + Kg * (z - H*state);
-                rez(:,detection_cursor) = z-H*state;
-                fprintf('Normalized error: %.2f \n', norm(z-H*state));
-                % covar_hat = (eye(size(state,1)) - Kg*H)*P;
-                state_hat = state;
-                covar_hat = P;
+                state_hat = state + Kg * (z - H*state);
+                rez(:,detection_cursor) = z-F1*state(1:3);
+                % fprintf('Normalized error: %.2f \n', norm(z-H*state));
+                covar_hat = (eye(size(state,1)) - Kg*H)*P;
+                %%% state_hat = state;
+                %%% covar_hat = P;
                 % Pi = inv(P);
                 % state_hat = inv(H'*Qi*H + Pi) * (H'*Qi*z + Pi*state); % maximum-a-posteriori estimation
                 % Make state_hat the first state of the window
                 Xww(:,1) = state_hat;
-                fprintf('State at %d second is: \n', next_detection_clock);
-                disp(state_hat);
-                fprintf('Cursor is: %d \n', imu_cursor);
+                % fprintf('State at %d second is: \n', next_detection_clock);
+                % disp(state_hat);
+                % fprintf('Cursor is: %d \n', imu_cursor);
                 % covar_hat = inv(H'*Qi*H + Pi);
                 Pww(:,:,1) = covar_hat;
                 % Propagate the new estimation using acceleration upto the
@@ -95,6 +99,7 @@ function [Xout] = panacea_odet(Add, Bdd, imuTs, detectionTs, out, window_length,
         end
     end
     Xout = X;
+    fprintf('Done! Inverse-Fitness is %.2f \n', fitness);
     fprintf('Done! \n Plotting data... ');
     figure
     plot(out.accel.time, Xout(1:3,:)');
