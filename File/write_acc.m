@@ -11,8 +11,8 @@ for i=1:length(out.accel.time)
     eulang = out.eulang.Data(cursor_eulang, :);
     R = eul2rotm(eulang);
     n = mvnrnd([0 0 0],0.0005*eye(3));
-    % fprintf(file, '%f,%f,%f,%f\r\n', out.accel.time(i), (Rc*out.accel.signals.values(i,:)' + Rc*R*n')');
     fprintf(file, '%f,%f,%f,%f\r\n', out.accel.time(i), (Rc*out.accel.signals.values(i,:)')');
+    % fprintf(file, '%f,%f,%f,%f\r\n', out.accel.time(i), (Rc*out.accel.signals.values(i,:)')');
 end
 fclose(file);
 
